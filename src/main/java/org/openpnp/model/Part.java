@@ -49,7 +49,6 @@ public class Part extends AbstractModelObject implements Identifiable {
     
     @Attribute(required = false)
     private int pickRetryCount = 0;
-
     @SuppressWarnings("unused")
     private Part() {
         this(null);
