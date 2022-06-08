@@ -226,7 +226,7 @@ public class BoardsPanel extends JPanel {
 
     @Subscribe
     public void fiducialLocatableLocationSelected(FiducialLocatableLocationSelectedEvent event) {
-        if (event.source == this || !(event.fiducialLocatableLocation.getFiducialLocatable() instanceof Board)) {
+        if (event.source == this || event.fiducialLocatableLocation == null || !(event.fiducialLocatableLocation.getFiducialLocatable() instanceof Board)) {
             return;
         }
         SwingUtilities.invokeLater(() -> {
@@ -236,16 +236,20 @@ public class BoardsPanel extends JPanel {
 
     @Subscribe
     public void placementSelected(PlacementSelectedEvent event) {
-        if (event.source == this || event.source == boardPlacementsPanel) {
+        if (event.source == this || event.source == boardPlacementsPanel || event.fiducialLocatableLocation == null || !(event.fiducialLocatableLocation.getFiducialLocatable() instanceof Board)) {
             return;
         }
         SwingUtilities.invokeLater(() -> {
-            selectBoard(event.boardLocation.getBoard());
+            selectBoard((Board) event.fiducialLocatableLocation.getFiducialLocatable());
             boardPlacementsPanel.selectPlacement(event.placement);
         });
     }
 
     private void selectBoard(Board board) {
+        if (board == null) {
+            boardsTable.getSelectionModel().clearSelection();
+            return;
+        }
         for (int i = 0; i < boardsTableModel.getRowCount(); i++) {
             if (configuration.getBoards().get(i) == board) {
                 int index = boardsTable.convertRowIndexToView(i);
