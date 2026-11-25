@@ -281,6 +281,25 @@ locally on macOS and Windows 11):
 - install4j (upstream) remains the production path for the original project;
   this pipeline is for the fork's private/learning builds.
 
+### 4.4 Build scripts (this fork)
+
+Two separate scripts — one per OS — both using paths relative to the repo (no
+personal paths; tools are discovered via env vars or the user profile):
+
+- `scripts/build-mac.sh` — macOS `.app` build (local, jpackage). `JAVA_HOME`
+  is auto-discovered under `/Library/Java/JavaVirtualMachines` if unset.
+  Steps: `mvn -q -B package -DskipTests` → staging → jpackage (`.app`) →
+  `--version` smoke test.
+- `scripts/build-windows.ps1` — Windows `.exe` build (run on a Windows host).
+  Discovery via `JAVA_HOME` / `MAVEN_HOME` / `WIX_HOME` env vars, then the
+  user profile (e.g. `%USERPROFILE%\maven`, `%USERPROFILE%\wix`), then
+  `PATH`. Steps: `git pull --ff-only` → `mvn -q -B package -DskipTests` →
+  staging → jpackage `.exe` (icon) → `--version` smoke test on a built
+  app-image.
+
+Both produce unsigned artifacts for private/learning use. `staging/`, `dist/`,
+`dist-appimage/` and `models/` are build artifacts (gitignored).
+
 ---
 
 ## 5. Current state / checklist
