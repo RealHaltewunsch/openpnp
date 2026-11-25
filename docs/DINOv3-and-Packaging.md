@@ -68,6 +68,14 @@ application itself; the packaging tooling and pipeline below are the deliverable
   Windows machine or a `windows-latest` GitHub Actions runner.
 - Windows `.exe` installers additionally require **WiX 3.x** (WiX 5/6 break
   jpackage). `app-image` (unpackaged directory) does not require WiX.
+- **Windows build verified** (2026-11-25, Windows 11 PC): Temurin JDK 21.0.13.1
+  via winget, Maven 3.9.16 (manual, no winget package), WiX 3.14.1 (manual,
+  `wix314-binaries.zip`), repo cloned locally. Built
+  `dist/OpenPnP-2.6.0.exe` (~236 MB) with icon, plus a Windows `app-image` whose
+  launcher was smoke-tested: `dist-appimage\OpenPnP\OpenPnP.exe --version` →
+  `2.6_2026-11-25_15-01-05.7da4a57` (exit 0). A `.ico` was generated from the
+  repo's iconset (`icon_512x512@2x.png` → multi-size ICO) and is committed at
+  `src/main/resources/icons/OpenPnP.ico`.
 
 ---
 
@@ -213,48 +221,53 @@ Gotchas:
 - `--type app-image` produces an `.app` bundle, not a `.dmg`. A `.dmg` can be
   added later with `--type dmg` (unsigned, for private use).
 
-### 4.2 Windows `.exe` — not built here; needs a Windows host
+### 4.2 Windows `.exe` — verified on a Windows host (2026-11-25)
 
 - **jpackage cannot cross-build**: Windows artifacts must be built on Windows
   (local Windows PC or `windows-latest` runner). There is no macOS→Windows
-  path. A local Windows PC is required only if a runner is unavailable; CI
-  runners are the practical route.
-- `.exe` installers additionally need **WiX 3.x** (`choco install wixtoolset`).
-  WiX 5/6 break jpackage. If WiX is unavailable, `--type app-image` still works
-  and produces a Windows app directory (with an `.exe` launcher inside).
+  path. A local Windows 11 PC was used.
+- `.exe` installers additionally need **WiX 3.x**. WiX 5/6 break jpackage.
+  If WiX is unavailable, `--type app-image` still works and produces a Windows
+  app directory (with an `.exe` launcher inside). WiX 3.14.1 was installed
+  manually (`wix314-binaries.zip` extracted to a local `wix/` directory);
+  `choco` is not present on the PC.
 - `install4j` (the upstream path) is **not** available here: it is commercial,
   needs a license key + secrets, and upstream CI only deploys from
   `openpnp/openpnp` main/test.
-- Verified-free path for the Windows side (to run on a Windows host):
+- Verified-free path for the Windows side:
 
   ```bat
   mvn -q -B package -DskipTests
   jpackage --type exe --name OpenPnP --app-version 2.6.0 ^
     --input staging --main-jar openpnp-gui-0.0.1-alpha-SNAPSHOT.jar ^
     --main-class org.openpnp.Main --dest dist ^
-    --icon src/main/resources/icons/OpenPnP-logo.ico ^
+    --icon src/main/resources/icons/OpenPnP.ico ^
     --java-options "--add-opens=java.base/java.lang=ALL-UNNAMED" ^
     --java-options "--add-opens=java.desktop/java.awt=ALL-UNNAMED" ^
     --java-options "--add-opens=java.desktop/java.awt.color=ALL-UNNAMED"
   ```
 
-  Note: a `.ico` (not the `.icns`) is needed for the Windows build — the repo
-  ships `src/main/resources/icons/OpenPnP-logo.icns` and an `OpenPNP-logo.iconset/`
-  directory of PNGs, so a `.ico` must be generated (e.g. with `png2ico` or
-  online converter) or the icon can be omitted.
+  Verified: `dist/OpenPnP-2.6.0.exe` (~236 MB) built and smoke-tested (app-image
+  launcher `--version` exits 0, prints `2.6_2026-11-25_15-01-05.7da4a57`).
+  The repo ships `src/main/resources/icons/OpenPnP.ico` (generated from the
+  iconset, multi-size 16–256 px) for the Windows build; `.icns` remains the
+  macOS icon.
 
-### 4.3 Release pipeline (draft)
+### 4.3 Release pipeline (draft, partially validated)
 
-`.github/workflows/release.yml` (new file, draft — **not tested here**; it only
-runs on a GitHub push of a release):
+`.github/workflows/release.yml` (new file; **not run on GitHub yet** — it only
+runs on a GitHub push of a release; the individual build steps were re-verified
+locally on macOS and Windows 11):
 
 - Trigger: `release: published` + `workflow_dispatch`.
 - **macOS job** (`macos-latest`): Temurin JDK 21 → `mvn -q -B package -DskipTests`
   → jpackage `--type app-image` → smoke test (`--version`) → zip `OpenPnP.app` →
   upload artifact + attach `OpenPnP.app.zip` to the GitHub release.
 - **Windows job** (`windows-latest`): Temurin JDK 21 → `mvn -q -B package
-  -DskipTests` → install WiX 3 → jpackage `--type exe` → upload artifact +
-  attach `.exe` to the GitHub release.
+  -DskipTests` → install WiX 3 → jpackage `--type exe` (with `--icon
+  src/main/resources/icons/OpenPnP.ico`) → upload artifact +
+  attach `.exe` to the GitHub release. Mirrors the locally-verified Windows
+  build.
 - Both jobs use `VERSION.txt` for `--app-version`.
 - **Release attachments**: on `release: published`, both assets are attached to
   the GitHub release page via `softprops/action-gh-release`
@@ -262,8 +275,9 @@ runs on a GitHub push of a release):
   `workflow_dispatch` runs). Release assets need single files — hence the `.app`
   is zipped first. `.app` zips are ~150 MB (GitHub's 2 GB asset limit is fine).
 - **Linux is out of scope** (no workflow; upstream also only ships macOS).
-- **Not tested**: the fork has no push/credentials here; the workflow is a
-  draft to be validated on the first real release.
+- **Not run on GitHub yet**: the workflow is a draft to be validated on the
+  first real release (both build steps were re-verified locally on macOS and
+  Windows 11; the release-attachment step is untested).
 - install4j (upstream) remains the production path for the original project;
   this pipeline is for the fork's private/learning builds.
 
@@ -273,7 +287,7 @@ runs on a GitHub push of a release):
 
 - [x] Fork cloned; OpenCV pipeline verified in-process (not HTTP/port).
 - [x] macOS `.app` built with jpackage and smoke-tested (`--version` exits 0).
-- [ ] Windows `.exe` built (needs Windows host or runner).
+- [x] Windows `.exe` built and smoke-tested (Windows 11 host, 2026-11-25).
 - [ ] Release workflow validated on first release.
 - [ ] DINOv3 service skeleton (Option A, §3).
 - [ ] Per-task checkpoint registry + gitignore for `models/`.
@@ -287,4 +301,5 @@ runs on a GitHub push of a release):
 - Is a signed/notarized `.app` needed? Not for private learning use; the
   unsigned `.app` runs (Gatekeeper will warn on first launch).
 - Should `.exe` be an installer (WiX) or an unpackaged app-image (no WiX)?
-  Installer is nicer for private distribution; both are possible.
+  Answer: installer (`.exe`) — verified 2026-11-25; app-image is used only for
+  the headless smoke test.

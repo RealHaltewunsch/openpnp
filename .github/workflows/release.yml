@@ -107,9 +107,23 @@ jobs:
             --main-jar openpnp-gui-0.0.1-alpha-SNAPSHOT.jar \
             --main-class org.openpnp.Main \
             --dest dist \
+            --icon src/main/resources/icons/OpenPnP.ico \
             --java-options "--add-opens=java.base/java.lang=ALL-UNNAMED" \
             --java-options "--add-opens=java.desktop/java.awt=ALL-UNNAMED" \
             --java-options "--add-opens=java.desktop/java.awt.color=ALL-UNNAMED"
+
+      - name: Smoke test (app-image launcher)
+        shell: bash
+        run: |
+          jpackage --type app-image --name OpenPnP --app-version "$(cat VERSION.txt).0" \
+            --input staging \
+            --main-jar openpnp-gui-0.0.1-alpha-SNAPSHOT.jar \
+            --main-class org.openpnp.Main \
+            --dest dist-appimage \
+            --java-options "--add-opens=java.base/java.lang=ALL-UNNAMED" \
+            --java-options "--add-opens=java.desktop/java.awt=ALL-UNNAMED" \
+            --java-options "--add-opens=java.desktop/java.awt.color=ALL-UNNAMED"
+          ./dist-appimage/OpenPnP/OpenPnP.exe --version
 
       - uses: actions/upload-artifact@v4
         with:
