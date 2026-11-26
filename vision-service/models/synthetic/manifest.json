@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "contract_version": 1,
+  "encoder": {
+    "name": "synthetic-encoder",
+    "version": "synthetic-1.0.0",
+    "path": "encoder.onnx",
+    "input": {
+      "name": "image",
+      "shape": [
+        1,
+        3,
+        32,
+        32
+      ],
+      "dtype": "float32"
+    },
+    "output": {
+      "name": "features",
+      "shape": [
+        1,
+        16
+      ],
+      "dtype": "float32"
+    },
+    "preprocessing": {
+      "resize": [
+        32,
+        32
+      ],
+      "mean": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "std": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "layout": "CHW",
+      "channel_first": true
+    }
+  },
+  "heads": {
+    "bottom-vision": {
+      "version": "synthetic-1.0.0",
+      "path": "heads/bottom-vision.onnx",
+      "encoder_version": "synthetic-1.0.0",
+      "input": {
+        "name": "features",
+        "shape": [
+          1,
+          16
+        ],
+        "dtype": "float32"
+      },
+      "output": {
+        "name": "result",
+        "shape": [
+          1,
+          6
+        ],
+        "dtype": "float32"
+      },
+      "output_layout": [
+        "center_x",
+        "center_y",
+        "size_w",
+        "size_h",
+        "angle_deg",
+        "confidence"
+      ]
+    },
+    "homing": {
+      "version": "synthetic-1.0.0",
+      "path": "heads/homing.onnx",
+      "encoder_version": "synthetic-1.0.0",
+      "input": {
+        "name": "features",
+        "shape": [
+          1,
+          16
+        ],
+        "dtype": "float32"
+      },
+      "output": {
+        "name": "result",
+        "shape": [
+          1,
+          4
+        ],
+        "dtype": "float32"
+      },
+      "output_layout": [
+        "center_x",
+        "center_y",
+        "visibility",
+        "confidence"
+      ]
+    }
+  }
+}

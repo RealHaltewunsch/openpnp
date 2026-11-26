@@ -20,4 +20,8 @@ hs_err*
 # Packaging artifacts (private builds)
 staging/
 dist/
-models/
+/models/
+
+# Python
+__pycache__/
+*.pyc

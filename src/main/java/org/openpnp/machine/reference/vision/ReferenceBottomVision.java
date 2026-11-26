@@ -1,6 +1,7 @@
 package org.openpnp.machine.reference.vision;
 
 import java.awt.image.BufferedImage;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import org.openpnp.util.MovableUtils;
 import org.openpnp.util.OpenCvUtils;
 import org.openpnp.util.Utils2D;
 import org.openpnp.util.VisionUtils;
+import org.openpnp.vision.alternative.ShadowBottomVisionObserver;
 import org.openpnp.vision.pipeline.CvPipeline;
 import org.openpnp.vision.pipeline.CvPipeline.PipelineShot;
 import org.openpnp.vision.pipeline.CvStage.Result;
@@ -83,6 +85,19 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
     @Deprecated
     @ElementMap(required = false)
     protected Map<String, PartSettings> partSettingsByPartId = null;
+
+    @Attribute(required = false)
+    protected boolean shadowMode = false;
+
+    @Attribute(required = false)
+    protected int shadowPort = 8010;
+
+    @Attribute(required = false)
+    protected int shadowTimeoutMs = 1000;
+
+    private transient ShadowBottomVisionObserver shadowObserver;
+    private transient int shadowObserverPort = -1;
+    private transient int shadowObserverTimeoutMs = -1;
 
     public ReferenceBottomVision() {
         Configuration.get().addListener(new ConfigurationListener.Adapter() {
@@ -308,6 +323,8 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
 
             partSizeCheck(part, bottomVisionSettings, rect, camera);
 
+            observeShadow(pipeline);
+
             return new PartAlignment.PartAlignmentOffset(offsets, true);
         }
     }
@@ -350,6 +367,8 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
 
             displayResult(OpenCvUtils.toBufferedImage(pipeline.getWorkingImage()), part, offsets, camera, nozzle);
             offsetsCheck(part, nozzle, offsets);
+
+            observeShadow(pipeline);
 
             return new PartAlignmentOffset(offsets, false);
         }
@@ -1043,6 +1062,53 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
                     }
                 }
             }
+        }
+    }
+
+    public boolean isShadowMode() {
+        return shadowMode;
+    }
+
+    public void setShadowMode(boolean shadowMode) {
+        this.shadowMode = shadowMode;
+    }
+
+    public int getShadowPort() {
+        return shadowPort;
+    }
+
+    public void setShadowPort(int shadowPort) {
+        this.shadowPort = shadowPort;
+    }
+
+    public int getShadowTimeoutMs() {
+        return shadowTimeoutMs;
+    }
+
+    public void setShadowTimeoutMs(int shadowTimeoutMs) {
+        this.shadowTimeoutMs = shadowTimeoutMs;
+    }
+
+    private void observeShadow(CvPipeline pipeline) {
+        if (!shadowMode) {
+            return;
+        }
+        try {
+            BufferedImage image = OpenCvUtils.toBufferedImage(pipeline.getWorkingImage());
+            if (image == null) {
+                return;
+            }
+            if (shadowObserver == null
+                    || shadowObserverPort != shadowPort
+                    || shadowObserverTimeoutMs != shadowTimeoutMs) {
+                shadowObserver = new ShadowBottomVisionObserver(shadowPort, Duration.ofMillis(shadowTimeoutMs));
+                shadowObserverPort = shadowPort;
+                shadowObserverTimeoutMs = shadowTimeoutMs;
+            }
+            shadowObserver.observe(image);
+        }
+        catch (Exception | Error e) {
+            Logger.warn("Shadow bottom vision: failed to capture working image: {}", e.getMessage());
         }
     }
 

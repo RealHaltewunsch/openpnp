@@ -1,0 +1,56 @@
+
+openpnp-vision-service:Æ
+ow_0w_0"Constant*Y
+value*M"@À’¬>À’¬>À’¬>À’¬>:r»>Aü‹¿×?2Î¼=€V=Ö ƒ@×j¾zëP>êy=u7ù>ªÅ¥¿QKN¾Bw_0 
+3b_0b_0"Constant*
+value*"à»¿Bb_0 
+(
+features
+w_0
+b_0raw_0raw_0"Gemm
+
+raw_0out_0out_0"Sigmoid
+ow_1w_1"Constant*Y
+value*M"@hİ­>hİ­>hİ­>hİ­>æœ¿Õxx¿¶¸Ë?×ì¯=¿=Ñå?=U¿t@>I«¾õÒ½¶c? “¿ª7¾Bw_1 
+3b_1b_1"Constant*
+value*"ß¼¦¿Bb_1 
+(
+features
+w_1
+b_1raw_1raw_1"Gemm
+
+raw_1out_1out_1"Sigmoid
+ow_2w_2"Constant*Y
+value*M"@s©(¦•©(û¨({œ(Pü£§š&2?g¦})÷±Á§d¹%'¾1M'lµ¢¦f²¨³Bâ§$O'Ñ÷R?İD>Bw_2 
+3b_2b_2"Constant*
+value*"Úo?Bb_2 
+(
+features
+w_2
+b_2raw_2raw_2"Gemm
+
+raw_2out_2out_2"Sigmoid
+ow_3w_3"Constant*Y
+value*M"@s©(¦•©(û¨({œ(Pü£§š&2?g¦})÷±Á§d¹%'¾1M'lµ¢¦f²¨³Bâ§$O'Ñ÷R?İD>Bw_3 
+3b_3b_3"Constant*
+value*"Úo?Bb_3 
+(
+features
+w_3
+b_3raw_3raw_3"Gemm
+
+raw_3out_3out_3"Sigmoid
+A
+out_0
+out_1
+out_2
+out_3resultresult"Concat*
+axis head-homingZ
+features
+
+
+b
+result
+
+
+B

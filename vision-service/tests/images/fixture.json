@@ -1,0 +1,15 @@
+{
+  "width": 320,
+  "height": 240,
+  "expected": {
+    "center_px": [
+      160.0,
+      120.0
+    ],
+    "size_px": [
+      176.0,
+      120.0
+    ],
+    "angle_deg": 12.0
+  }
+}

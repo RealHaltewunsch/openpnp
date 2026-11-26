@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -25,9 +26,9 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 
 /**
- * Calls a separate process on 127.0.0.1. POST /v1/bottom-vision accepts a PNG and returns
- * JSON with status and optional confidence. A detected result also has center_px,
- * size_px (two numbers each), and angle_deg. Other results carry no usable pose.
+ * Calls a separate process on 127.0.0.1. POST /v1/infer accepts a JSON body with a task and
+ * a base64 PNG image and returns JSON with status and optional confidence. A detected result
+ * also has center_px, size_px (two numbers each), and angle_deg. Other results carry no usable pose.
  */
 public final class LocalBottomVisionClient implements BottomVisionEngine {
     private final HttpClient client;
@@ -39,7 +40,7 @@ public final class LocalBottomVisionClient implements BottomVisionEngine {
         if (port < 1 || port > 65535 || timeout.toMillis() < 1) {
             throw new IllegalArgumentException("A valid port and positive timeout are required");
         }
-        this.endpoint = URI.create("http://127.0.0.1:" + port + "/v1/bottom-vision");
+        this.endpoint = URI.create("http://127.0.0.1:" + port + "/v1/infer");
         this.client = HttpClient.newBuilder().connectTimeout(timeout)
                 .proxy(ProxySelector.of(null)).build();
     }
@@ -51,13 +52,18 @@ public final class LocalBottomVisionClient implements BottomVisionEngine {
         if (!ImageIO.write(image, "PNG", png)) {
             throw new IOException("No PNG image writer is available");
         }
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
-                .header("Content-Type", "image/png")
+        String imageB64 = Base64.getEncoder().encodeToString(png.toByteArray());
+        JsonObject request = new JsonObject();
+        request.addProperty("task", "bottom-vision");
+        request.addProperty("image_png_base64", imageB64);
+        String body = request.toString();
+        HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
+                .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(png.toByteArray()))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         CompletableFuture<HttpResponse<String>> pending =
-                client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+                client.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString());
         try {
             HttpResponse<String> response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (response.statusCode() != 200) {

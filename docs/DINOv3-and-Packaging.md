@@ -16,7 +16,8 @@ application itself; the packaging tooling and pipeline below are the deliverable
     model (image-space center, size, clockwise angle; the caller applies part
     symmetry and the camera-to-machine transform).
   - `src/main/java/org/openpnp/vision/alternative/LocalBottomVisionClient.java` —
-    HTTP client. `POST http://127.0.0.1:<port>/v1/bottom-vision` with a PNG body;
+    HTTP client. `POST http://127.0.0.1:<port>/v1/infer` with a JSON body
+    (`{"task":"bottom-vision","image_png_base64":"<base64 PNG>"}`);
     expects a JSON response with `status` (`DETECTED` | `NO_DETECTION` |
     `UNCERTAIN` | `ERROR`), optional `confidence` (0–1), and for detected results
     `center_px` and `size_px` (two-number arrays) and `angle_deg`.
@@ -114,7 +115,7 @@ In-JVM integration (OpenCV-style, or Java-side inference) was rejected:
 
 The endpoint (already the fork's client contract):
 
-- `POST /v1/bottom-vision` with `Content-Type: image/png` body → response JSON:
+- `POST /v1/infer` with JSON body (`{"task":"bottom-vision","image_png_base64":"..."}`) → response JSON:
   - `status`: `DETECTED` | `NO_DETECTION` | `UNCERTAIN` | `ERROR`
   - `confidence`: optional 0–1
   - `DETECTED`: `center_px`: [x, y], `size_px`: [w, h], `angle_deg`: number
@@ -163,7 +164,7 @@ models/<task>/checkpoint.pt   # e.g. models/fiducials/checkpoint.pt
 ### 3.6 Intermediate steps (not done yet)
 
 1. Python service skeleton (FastAPI/Flask) implementing the contract:
-   `POST /v1/bottom-vision` → load task checkpoint → run inference → JSON out.
+   `POST /v1/infer` → load task checkpoint → run inference → JSON out.
 2. Task registry in Java: `Task → (endpoint, timeout)`; a `BottomVisionEngine`
    factory that selects the client by task.
 3. Wire the engine into the bottom-vision path (`ReferenceBottomVision` or a

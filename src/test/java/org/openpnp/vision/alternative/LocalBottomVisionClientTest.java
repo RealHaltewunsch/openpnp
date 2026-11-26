@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -21,6 +23,8 @@ import org.openpnp.vision.alternative.BottomVisionEngine.Pose;
 import org.openpnp.vision.alternative.BottomVisionEngine.Result;
 import org.openpnp.vision.alternative.BottomVisionEngine.Status;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpServer;
 
 class LocalBottomVisionClientTest {
@@ -70,7 +74,7 @@ class LocalBottomVisionClientTest {
     void timesOutWhenResponseBodyDoesNotFinish() {
         CountDownLatch releaseServer = new CountDownLatch(1);
         CountDownLatch headersSent = new CountDownLatch(1);
-        server.createContext("/v1/bottom-vision", exchange -> {
+        server.createContext("/v1/infer", exchange -> {
             try {
                 exchange.getRequestBody().readAllBytes();
                 exchange.sendResponseHeaders(200, 0);
@@ -100,11 +104,14 @@ class LocalBottomVisionClientTest {
     }
 
     private Result analyze(String json) throws IOException, InterruptedException {
-        server.createContext("/v1/bottom-vision", exchange -> {
+        server.createContext("/v1/infer", exchange -> {
             try {
-                BufferedImage received = ImageIO.read(exchange.getRequestBody());
+                JsonObject request = new JsonParser().parse(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
+                String imageB64 = request.get("image_png_base64").getAsString();
+                BufferedImage received = ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(imageB64)));
                 if (!"POST".equals(exchange.getRequestMethod())
-                        || !"image/png".equals(exchange.getRequestHeaders().getFirst("Content-Type"))
+                        || !"application/json".equals(exchange.getRequestHeaders().getFirst("Content-Type"))
+                        || !"bottom-vision".equals(request.get("task").getAsString())
                         || received == null || received.getWidth() != image.getWidth()
                         || received.getHeight() != image.getHeight()
                         || received.getRGB(10, 12) != image.getRGB(10, 12)) {
