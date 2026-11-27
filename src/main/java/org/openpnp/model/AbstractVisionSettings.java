@@ -38,7 +38,7 @@ public abstract class AbstractVisionSettings extends AbstractModelObject impleme
     @Attribute
     protected boolean enabled;
 
-    @Element
+    @Element(required = false)
     private CvPipeline cvPipeline;
 
     @ElementMap(required = false)
@@ -270,6 +270,13 @@ public abstract class AbstractVisionSettings extends AbstractModelObject impleme
 
     public boolean isStockSetting() {
         return getId().contains("Stock");
+    }
+
+    /**
+     * @return true if these settings drive an OpenCV pipeline. ONNX-based settings do not.
+     */
+    public boolean usePipeline() {
+        return true;
     }
 
     public static String createSettingsFingerprint(Object partSettings) {

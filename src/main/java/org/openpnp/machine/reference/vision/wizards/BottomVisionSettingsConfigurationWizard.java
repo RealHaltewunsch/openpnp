@@ -152,7 +152,7 @@ public class BottomVisionSettingsConfigurationWizard extends AbstractConfigurati
                             && visionSettings.getUsedBottomVisionIn().get(0) == settingsHolder) {
                         throw new Exception("Vision Settings already specialized for "+settingsHolder.getShortName()+".");
                     }
-                    BottomVisionSettings newSettings = new BottomVisionSettings();
+                    BottomVisionSettings newSettings = visionSettings.createSpecialization();
                     newSettings.setValues(visionSettings);
                     newSettings.setName(settingsHolder.getShortName());
                     settingsHolder.setBottomVisionSettings(newSettings);
@@ -214,7 +214,8 @@ public class BottomVisionSettingsConfigurationWizard extends AbstractConfigurati
                         JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 if (result == JOptionPane.YES_OPTION) {
                     ReferenceBottomVision bottomVision = ReferenceBottomVision.getDefault();
-                    if (bottomVision.getBottomVisionSettings() == visionSettings) {
+                    if (bottomVision.getBottomVisionSettings() == visionSettings
+                            || bottomVision.getBottomVisionSettings().usePipeline() != visionSettings.usePipeline()) {
                         // Already the default. Set stock.
                         visionSettings.resetToDefault();
                     }
@@ -263,45 +264,48 @@ public class BottomVisionSettingsConfigurationWizard extends AbstractConfigurati
         textPartSizeTolerance = new JTextField();
         panel.add(textPartSizeTolerance, "8, 12, fill, default");
 
-        pipelinePanel = new PipelineControls() {
+        if (visionSettings.usePipeline()) {
+            pipelinePanel = new PipelineControls() {
 
-            @Override
-            public void configurePipeline(CvPipeline pipeline, Map<String, Object> pipelineParameterAssignments, boolean edit) throws Exception {
-                UiUtils.messageBoxOnException(() -> {
-                    if (edit) {
-                        // Accept changes before edit.
-                        applyAction.actionPerformed(null);
-                    }
-                    pipelineConfiguration(pipeline,pipelineParameterAssignments, edit);
-                });
-            }
-
-            @Override
-            public Camera getCamera() throws Exception { return VisionUtils.getBottomVisionCamera(); }
-
-            @Override
-            public void resetPipeline() throws Exception {
-                int result = JOptionPane.showConfirmDialog(getTopLevelAncestor(),
-                        "This will replace the Pipeline with the default. Are you sure??", null,
-                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-                if (result == JOptionPane.YES_OPTION) {
+                @Override
+                public void configurePipeline(CvPipeline pipeline, Map<String, Object> pipelineParameterAssignments, boolean edit) throws Exception {
                     UiUtils.messageBoxOnException(() -> {
-                        applyAction.actionPerformed(null);
-                        ReferenceBottomVision bottomVision = ReferenceBottomVision.getDefault();
-                        if (bottomVision.getBottomVisionSettings() == visionSettings) {
-                            // Already the default. Set stock.
-                            pipelinePanel.setPipeline(ReferenceBottomVision.createStockPipeline("Default"));
+                        if (edit) {
+                            // Accept changes before edit.
+                            applyAction.actionPerformed(null);
                         }
-                        else {
-                            pipelinePanel.setPipeline(bottomVision.getBottomVisionSettings().getPipeline().clone());
-                        }
+                        pipelineConfiguration(pipeline,pipelineParameterAssignments, edit);
                     });
                 }
-            }
-        };
-        pipelinePanel.setResetable(true);
-        pipelinePanel.setEditable(true);
-        panel.add(pipelinePanel, "1, 14, 14, 1, fill, fill");
+
+                @Override
+                public Camera getCamera() throws Exception { return VisionUtils.getBottomVisionCamera(); }
+
+                @Override
+                public void resetPipeline() throws Exception {
+                    int result = JOptionPane.showConfirmDialog(getTopLevelAncestor(),
+                            "This will replace the Pipeline with the default. Are you sure??", null,
+                            JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    if (result == JOptionPane.YES_OPTION) {
+                        UiUtils.messageBoxOnException(() -> {
+                            applyAction.actionPerformed(null);
+                            ReferenceBottomVision bottomVision = ReferenceBottomVision.getDefault();
+                            if (bottomVision.getBottomVisionSettings() == visionSettings
+                                    || !bottomVision.getBottomVisionSettings().usePipeline()) {
+                                // Already the default. Set stock.
+                                pipelinePanel.setPipeline(ReferenceBottomVision.createStockPipeline("Default"));
+                            }
+                            else {
+                                pipelinePanel.setPipeline(bottomVision.getBottomVisionSettings().getPipeline().clone());
+                            }
+                        });
+                    }
+                }
+            };
+            pipelinePanel.setResetable(true);
+            pipelinePanel.setEditable(true);
+            panel.add(pipelinePanel, "1, 14, 14, 1, fill, fill");
+        }
 
         JPanel panelAlign = new JPanel();
         contentPanel.add(panelAlign);
@@ -454,8 +458,10 @@ public class BottomVisionSettingsConfigurationWizard extends AbstractConfigurati
 
         addWrappedBinding(bottomVision, "testAlignmentAngle", testAlignmentAngle, "text", doubleConverter);
 
-        bind(UpdateStrategy.READ_WRITE, visionSettings, "pipeline", pipelinePanel, "pipeline");
-        addWrappedBinding(visionSettings, "pipelineParameterAssignments", pipelinePanel, "pipelineParameterAssignments");
+        if (visionSettings.usePipeline()) {
+            bind(UpdateStrategy.READ_WRITE, visionSettings, "pipeline", pipelinePanel, "pipeline");
+            addWrappedBinding(visionSettings, "pipelineParameterAssignments", pipelinePanel, "pipelineParameterAssignments");
+        }
 
         ComponentDecorators.decorateWithAutoSelect(textPartSizeTolerance);
         //ComponentDecorators.decorateWithAutoSelect(testAlignmentAngle);

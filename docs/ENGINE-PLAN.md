@@ -21,7 +21,27 @@ Bearbeite die folgenden Schritte selbst im Fork. Beginne mit dem Schnittstellenv
 1. **Vertrag entwerfen.** Einen versionierten Loopback-Dienst mit Health-Endpunkt und einer Inferenzroute definieren. Die Anfrage enthält Aufgabe, Bild und bei Bedarf erwartetes Gehäuse oder Suchbereich. Antworten tragen Status, Ergebnis in Originalpixeln und Modellversion. Bottom Vision liefert Mittelpunkt, Größe und Winkel einschließlich Mehrdeutigkeit. Homing liefert Mittelpunkt und Sichtbarkeit. Den vorhandenen Bottom-Client als Einstieg prüfen.
 2. **Encoder und Köpfe trennen.** Mit eingefrorenem DINOv3 ViT-S/16 beginnen. Einen Encoder-Export und separate Head-Exporte erproben. Ein Manifest verknüpft Head-Version, Encoder-Version, Merkmalslayout und Vorverarbeitung. Der Dienst lädt den Encoder einmal, lädt Köpfe bei Bedarf und wärmt sie vor der ersten zeitkritischen Nutzung auf. Beim Aufgabenwechsel prüfen, dass die Encoder-Sitzung dieselbe bleibt. Einen Wechsel der Encoder-Gewichte als eigene Modellversion behandeln.
 3. **Plattformen anhand gleicher Bilder prüfen.** ONNX Runtime CPU als Referenz auf Windows x64 und macOS arm64. Auf der Windows-D700 DirectML und auf Apple Silicon CoreML für genau die exportierten Graphen prüfen. Aktiven Provider und etwaige CPU-Ausführung protokollieren. Mittelpunkt- und Winkelabweichung, Speicher und Latenz messen. Die Übergabe der Encoder-Merkmale an den Kopf mitmessen. Start und Verbindung aus der vorhandenen Windows- und Mac-App testen. Für die erste Integration kann der Dienst separat laufen.
-4. **Bottom Vision zuerst.** Einen Pose-Kopf auf echten IC-Unterseiten trainieren und auf unabhängigen Bildern gegen die aktuelle Pipeline prüfen. Mittelpunkt und Winkel auf den Footprint beziehen. Leere Düse, Fehlpick und symmetrische Gehäuse abdecken. Danach im Schattenmodus denselben Frame vergleichen. Erst nach Abnahme die bestehende OpenPnP-Korrektur mit dem neuen Ergebnis versorgen.
+4. **Bottom Vision zuerst.** Einen Pose-Kopf auf echten IC-Unterseiten trainieren und auf unabhängigen Bildern gegen die aktuelle Pipeline prüfen. Mittelpunkt und Winkel auf den Footprint beziehen. Leere Düse, Fehlpick und symmetrische Gehäuse abdecken. Die auswählbaren ONNX-Einstellungen versorgen bereits die bestehende OpenPnP-Korrektur mit dem Dienstergebnis. Vor produktivem Einsatz müssen trainierte Gewichte auf unabhängigen Bildern und auf der Maschine abgenommen werden.
 5. **Weitere Köpfe anschließen.** Homing als zweiten Kopf mit eigenen Labels und unabhängiger Abnahme ergänzen. Damit den Wechsel zwischen zwei Aufgaben mit demselben geladenen Encoder nachweisen. Platinenfiduziale, Feeder, Trays und Arbeitsflächenscan im Anschluss einzeln gemäß Roadmap migrieren.
 
 Lies zum Einstieg Abschnitt 3 des bestehenden Entwurfs, die beiden Java-Klassen und den Aufruf in `ReferenceBottomVision`. Skizziere den Vertrag mit einer Beispielanfrage und je einer Antwort für Bottom Vision und Homing. Verwende diese Beispiele beim Aufbau des Dienstes als Testfälle.
+
+## Implementierter Stand (2026-11-27)
+
+Der Python-Dienst und der Java-Client verwenden `/v1/infer`. **ONNX Bottom Vision**
+ist als eigene Einstellungsart auswählbar und liefert die tatsächlichen
+Ausrichtungswerte, einschließlich Vorrotation, Mehrfachaufnahmen, Größen- und
+Offsetprüfungen. Bestehende OpenCV-Einstellungen behalten ihren Ausführungspfad.
+Der frühere Schattenmodus ist entfernt.
+
+Das Menü **Maschine** enthält den Dienstschalter und den Installationsdialog.
+Dieser wählt Python, Dienstverzeichnis, Modell-/Gewichteverzeichnis und Port und
+installiert Abhängigkeiten in einer eigenen `.venv`. Aktivierung wird lokal
+persistiert; der Dienst startet bei aktivierter Option mit der Anwendung.
+
+Geprüft werden Serialisierung, Wizard-Typ, ONNX-Ausrichtung mit simuliertem
+Kamerabild/HTTP-Testdienst und der Prozesslebenszyklus. Die mitgelieferten
+synthetischen Modelle dienen ausschließlich Integrationstests. Training und
+Abnahme auf echten IC-Unterseiten, Windows-/D700-Prüfung und Latenzvergleiche
+mit trainierten Modellen sind weiterhin offen und gehören zur nachfolgenden
+Modell-/Hardwarevalidierung.

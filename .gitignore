@@ -25,3 +25,6 @@ dist/
 # Python
 __pycache__/
 *.pyc
+
+# Local Python dependency environments
+.venv/

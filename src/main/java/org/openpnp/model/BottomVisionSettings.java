@@ -40,6 +40,14 @@ public class BottomVisionSettings extends AbstractVisionSettings {
         return new BottomVisionSettingsConfigurationWizard(this, settingsHolder);
     }
 
+    /**
+     * @return a new instance of the same concrete type as this settings object, ready to be
+     * populated with the shared fields of this object.
+     */
+    public BottomVisionSettings createSpecialization() {
+        return new BottomVisionSettings();
+    }
+
     public BottomVisionSettings() {
         super(Configuration.createId("BVS"));
     }

@@ -4,7 +4,6 @@ import javax.swing.Action;
 import javax.swing.Icon;
 
 import org.openpnp.gui.support.Wizard;
-import org.openpnp.machine.reference.vision.wizards.BottomVisionSettingsConfigurationWizard;
 import org.openpnp.model.BottomVisionSettings;
 import org.openpnp.model.Configuration;
 import org.openpnp.model.Part;
@@ -92,10 +91,12 @@ public abstract class AbstractPartAlignment extends AbstractPartSettingsHolder i
             return null;
         }
         try {
-            visionSettings.getPipeline().setProperty("camera", VisionUtils.getBottomVisionCamera());
+            if (visionSettings.usePipeline()) {
+                visionSettings.getPipeline().setProperty("camera", VisionUtils.getBottomVisionCamera());
+            }
         }
         catch (Exception e) {
         }
-        return new BottomVisionSettingsConfigurationWizard(visionSettings, partSettingsHolder);
+        return visionSettings.getConfigurationWizard(partSettingsHolder);
     }
 }

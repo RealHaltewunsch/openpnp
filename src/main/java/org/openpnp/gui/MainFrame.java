@@ -83,6 +83,7 @@ import javax.swing.undo.UndoManager;
 
 import org.openpnp.Main;
 import org.openpnp.Translations;
+import org.openpnp.vision.service.VisionServiceController;
 import org.openpnp.gui.components.CameraPanel;
 import org.openpnp.gui.components.ThemeDialog;
 import org.openpnp.gui.importer.BoardImporter;
@@ -511,6 +512,7 @@ public class MainFrame extends JFrame {
         JMenu mnCommands = new JMenu(Translations.getString("Menu.Machine")); //$NON-NLS-1$
         mnCommands.setMnemonic(KeyEvent.VK_M);
         menuBar.add(mnCommands);
+        VisionServiceController.getInstance().addMenuItems(mnCommands, this);
         mnCommands.addSeparator();
 
         // Scripts

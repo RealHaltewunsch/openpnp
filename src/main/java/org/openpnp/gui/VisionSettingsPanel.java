@@ -35,6 +35,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.table.TableRowSorter;
 
 import org.openpnp.Translations;
+import org.openpnp.vision.service.VisionServiceController;
 import org.openpnp.gui.components.AutoSelectTextTable;
 import org.openpnp.gui.support.AbstractConfigurationWizard;
 import org.openpnp.gui.support.Helpers;
@@ -48,6 +49,7 @@ import org.openpnp.machine.reference.vision.AbstractPartAlignment;
 import org.openpnp.machine.reference.vision.ReferenceFiducialLocator;
 import org.openpnp.model.AbstractVisionSettings;
 import org.openpnp.model.BottomVisionSettings;
+import org.openpnp.model.OnnxBottomVisionSettings;
 import org.openpnp.model.Configuration;
 import org.openpnp.model.Configuration.VisionSettingsConfigurationHolder;
 import org.openpnp.model.FiducialVisionSettings;
@@ -158,6 +160,10 @@ public class VisionSettingsPanel extends JPanel implements WizardContainer {
         visionTypeFilter.addItemListener(new ItemListener() {
             public void itemStateChanged(ItemEvent arg0) {
                 filterTable();
+                if (arg0.getStateChange() == ItemEvent.SELECTED
+                        && arg0.getItem() == VisionTypeFilter.OnnxBottomVision) {
+                    VisionServiceController.warnIfDisabled(VisionSettingsPanel.this);
+                }
             }
         });
 
@@ -172,7 +178,14 @@ public class VisionSettingsPanel extends JPanel implements WizardContainer {
 
     protected enum VisionTypeFilter {
         BottomVision,
-        FiducialVision
+        OnnxBottomVision,
+        FiducialVision;
+
+        @Override
+        public String toString() {
+            return this == OnnxBottomVision
+                    ? Translations.getString("VisionSettingsPanel.OnnxBottomVision") : name();
+        }
     }
 
     private AbstractVisionSettings getSelection() {
@@ -213,6 +226,10 @@ public class VisionSettingsPanel extends JPanel implements WizardContainer {
             switch (filterType) {
                 case BottomVision:
                     visionSettings = new BottomVisionSettings();
+                    break;
+                case OnnxBottomVision:
+                    VisionServiceController.warnIfDisabled(VisionSettingsPanel.this);
+                    visionSettings = new OnnxBottomVisionSettings();
                     break;
                 case FiducialVision:
                     visionSettings = new FiducialVisionSettings();
@@ -353,6 +370,7 @@ public class VisionSettingsPanel extends JPanel implements WizardContainer {
         AbstractVisionSettings visionSettings = null;
         switch (filterType) {
             case BottomVision:
+            case OnnxBottomVision:
                 visionSettings = AbstractPartAlignment.getInheritedVisionSettings(partSettingsHolder, true);
                 break;
             case FiducialVision:
@@ -370,13 +388,20 @@ public class VisionSettingsPanel extends JPanel implements WizardContainer {
 
     protected void filterTable() {
         final VisionTypeFilter filterType = (VisionTypeFilter) visionTypeFilter.getSelectedItem();
+        String actionKey = filterType == VisionTypeFilter.OnnxBottomVision
+                ? "VisionSettingsPanel.Action.NewOnnxSettings" : "VisionSettingsPanel.Action.NewSettings";
+        newSettingsAction.putValue(Action.NAME, Translations.getString(actionKey));
+        newSettingsAction.putValue(Action.SHORT_DESCRIPTION, Translations.getString(actionKey + ".Description"));
         tableSorter.setRowFilter(new RowFilter<VisionSettingsTableModel, Integer>() {
             @Override
             public boolean include(Entry<? extends VisionSettingsTableModel, ? extends Integer> entry) {
                 AbstractVisionSettings visionSettings = tableModel.getRowObjectAt(entry.getIdentifier());
                 switch (filterType) {
                     case BottomVision:
-                        return visionSettings instanceof BottomVisionSettings;
+                        return visionSettings instanceof BottomVisionSettings
+                                && !(visionSettings instanceof OnnxBottomVisionSettings);
+                    case OnnxBottomVision:
+                        return visionSettings instanceof OnnxBottomVisionSettings;
                     case FiducialVision:
                         return visionSettings instanceof FiducialVisionSettings;
                     default: 

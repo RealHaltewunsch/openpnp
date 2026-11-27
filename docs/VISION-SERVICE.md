@@ -202,3 +202,28 @@ POST /v1/infer
 {"task":"homing","status":"DETECTED","confidence":0.9,"visibility":0.9,
  "center_px":[320.0,240.0],"model_version":"synthetic-1.0.0+synthetic-1.0.0"}
 ```
+
+## OpenPnP engine wiring (2026-11-27)
+
+`OnnxBottomVisionSettings` selects this service as the actual Bottom Vision
+engine. It stores shared alignment options without an OpenCV pipeline. Existing
+`BottomVisionSettings` retain their pipeline behavior. Type-aware wizards and
+specialization preserve the selected engine, including XML round-trips.
+
+The Machine menu owns service startup/shutdown and an installation dialog with
+Python, service directory, model directory and port selection. Dependencies are
+installed into `<service-dir>/.venv`. Preferences are stored under
+`org.openpnp.vision.service`; defaults are port 8010 and
+`<working-directory>/vision-service/models/synthetic`. See the service README
+for setup and startup diagnostics.
+
+For ONNX settings, `ReferenceBottomVision` captures each settled shot with light
+cleanup in a `finally` block, calls `/v1/infer`, and converts the detected image
+pose into `RotatedRect` geometry. The existing camera conversion, pre-rotation
+passes, compositing, size/tolerance checks and result display consume this pose.
+OpenCV stages are not executed. Any non-DETECTED status or request failure aborts
+alignment. The shadow observer has been removed.
+
+The supplied synthetic package validates service plumbing and returns fixture
+geometry. Real placement requires trained and independently validated weights.
+Windows startup/provider behavior and real-machine placement remain unverified.

@@ -62,6 +62,7 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableRowSorter;
 
 import org.openpnp.Translations;
+import org.openpnp.vision.service.VisionServiceController;
 import org.openpnp.gui.components.AutoSelectTextTable;
 import org.openpnp.gui.support.AbstractConfigurationWizard;
 import org.openpnp.gui.support.ActionGroup;
@@ -81,6 +82,7 @@ import org.openpnp.gui.tablemodel.PartsTableModel;
 import org.openpnp.gui.wizards.PartSettingsWizard;
 import org.openpnp.model.AbstractVisionSettings;
 import org.openpnp.model.BottomVisionSettings;
+import org.openpnp.model.OnnxBottomVisionSettings;
 import org.openpnp.model.Configuration;
 import org.openpnp.model.Configuration.TablesLinked;
 import org.openpnp.model.FiducialVisionSettings;
@@ -198,6 +200,11 @@ public class PartsPanel extends JPanel implements WizardContainer {
 
         JComboBox<BottomVisionSettings> bottomVisionCombo = new JComboBox<>(
                 new VisionSettingsComboBoxModel(BottomVisionSettings.class));
+        bottomVisionCombo.addActionListener(e -> {
+            if (bottomVisionCombo.getSelectedItem() instanceof OnnxBottomVisionSettings) {
+                VisionServiceController.warnIfDisabled(this);
+            }
+        });
         bottomVisionCombo.setMaximumRowCount(20);
         bottomVisionCombo.setRenderer(new NamedListCellRenderer<>());
         table.setDefaultEditor(BottomVisionSettings.class,

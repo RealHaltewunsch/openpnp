@@ -11,6 +11,7 @@ import org.opencv.core.Point;
 import org.opencv.core.RotatedRect;
 import org.opencv.core.Size;
 import org.openpnp.ConfigurationListener;
+import org.openpnp.Translations;
 import org.openpnp.gui.MainFrame;
 import org.openpnp.gui.support.DoubleConverter;
 import org.openpnp.gui.support.LengthConverter;
@@ -18,7 +19,6 @@ import org.openpnp.gui.support.PropertySheetWizardAdapter;
 import org.openpnp.machine.reference.ReferenceNozzleTip;
 import org.openpnp.machine.reference.ReferenceNozzleTipCalibration;
 import org.openpnp.machine.reference.ReferenceNozzleTipCalibration.BackgroundCalibrationMethod;
-import org.openpnp.machine.reference.vision.wizards.BottomVisionSettingsConfigurationWizard;
 import org.openpnp.machine.reference.vision.wizards.ReferenceBottomVisionConfigurationWizard;
 import org.openpnp.model.AbstractModelObject;
 import org.openpnp.model.AbstractVisionSettings;
@@ -28,6 +28,7 @@ import org.openpnp.model.Configuration;
 import org.openpnp.model.Length;
 import org.openpnp.model.LengthUnit;
 import org.openpnp.model.Location;
+import org.openpnp.model.OnnxBottomVisionSettings;
 import org.openpnp.model.Package;
 import org.openpnp.model.Part;
 import org.openpnp.model.PartSettingsHolder;
@@ -44,7 +45,9 @@ import org.openpnp.util.MovableUtils;
 import org.openpnp.util.OpenCvUtils;
 import org.openpnp.util.Utils2D;
 import org.openpnp.util.VisionUtils;
-import org.openpnp.vision.alternative.ShadowBottomVisionObserver;
+import org.openpnp.vision.alternative.BottomVisionEngine;
+import org.openpnp.vision.alternative.LocalBottomVisionClient;
+import org.openpnp.vision.service.VisionServiceController;
 import org.openpnp.vision.pipeline.CvPipeline;
 import org.openpnp.vision.pipeline.CvPipeline.PipelineShot;
 import org.openpnp.vision.pipeline.CvStage.Result;
@@ -54,6 +57,8 @@ import org.simpleframework.xml.Element;
 import org.simpleframework.xml.ElementMap;
 import org.simpleframework.xml.Root;
 
+// Accept configurations saved by the retired optional shadow observer.
+@Root(strict = false)
 public class ReferenceBottomVision extends AbstractPartAlignment {
 
     @Deprecated
@@ -85,19 +90,6 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
     @Deprecated
     @ElementMap(required = false)
     protected Map<String, PartSettings> partSettingsByPartId = null;
-
-    @Attribute(required = false)
-    protected boolean shadowMode = false;
-
-    @Attribute(required = false)
-    protected int shadowPort = 8010;
-
-    @Attribute(required = false)
-    protected int shadowTimeoutMs = 1000;
-
-    private transient ShadowBottomVisionObserver shadowObserver;
-    private transient int shadowObserverPort = -1;
-    private transient int shadowObserverTimeoutMs = -1;
 
     public ReferenceBottomVision() {
         Configuration.get().addListener(new ConfigurationListener.Adapter() {
@@ -243,14 +235,14 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
         Location nozzleLocation = wantedLocation;
         final Location center = new Location(maxLinearOffset.getUnits());
 
-        try (CvPipeline pipeline = bottomVisionSettings.getPipeline()) {
+        try (AlignmentRun run = new AlignmentRun(bottomVisionSettings)) {
 
             // The running, iterative offset.
             Location offsets = new Location(nozzleLocation.getUnits());
             RotatedRect rect;
             // Try getting a good fix on the part in multiple passes.
             for(int pass = 0;;) {
-                rect = processPipelineAndGetResult(pipeline, camera, part, nozzle,
+                rect = run.process(camera, part, nozzle,
                         wantedLocation, nozzleLocation, bottomVisionSettings);
 
                 Logger.debug("Bottom vision part {} result rect {}", part.getId(), rect);
@@ -318,12 +310,10 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
             // subtract visionCenterOffset
             offsets = offsets.subtract(bottomVisionSettings.getVisionOffset().rotateXy(wantedAngle));
 
-            displayResult(OpenCvUtils.toBufferedImage(pipeline.getWorkingImage()), part, offsets, camera, nozzle);
+            displayResult(run.getImage(), part, offsets, camera, nozzle);
             offsetsCheck(part, nozzle, offsets);
 
             partSizeCheck(part, bottomVisionSettings, rect, camera);
-
-            observeShadow(pipeline);
 
             return new PartAlignment.PartAlignmentOffset(offsets, true);
         }
@@ -336,8 +326,8 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
         // and a rotation of 0, unless preRotate is enabled
         Location wantedLocation = getCameraLocationAtPartHeight(part, camera, nozzle, 0.);
 
-        try (CvPipeline pipeline = bottomVisionSettings.getPipeline()) {
-            RotatedRect rect = processPipelineAndGetResult(pipeline, camera, part, nozzle, wantedLocation, wantedLocation, bottomVisionSettings);
+        try (AlignmentRun run = new AlignmentRun(bottomVisionSettings)) {
+            RotatedRect rect = run.process(camera, part, nozzle, wantedLocation, wantedLocation, bottomVisionSettings);
 
             Logger.debug("Bottom vision part {} result rect {}", part.getId(), rect);
 
@@ -365,10 +355,8 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
             // subtract visionCenterOffset
             offsets = offsets.subtract(bottomVisionSettings.getVisionOffset().rotateXy(offsets.getRotation()));
 
-            displayResult(OpenCvUtils.toBufferedImage(pipeline.getWorkingImage()), part, offsets, camera, nozzle);
+            displayResult(run.getImage(), part, offsets, camera, nozzle);
             offsetsCheck(part, nozzle, offsets);
-
-            observeShadow(pipeline);
 
             return new PartAlignmentOffset(offsets, false);
         }
@@ -640,6 +628,91 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
         return (RotatedRect) pipeline.getCurrentPipelineShot().processCompositeResult().getModel();
     }
 
+    /** Keeps capture state local to an alignment, including all pre-rotation passes. */
+    private class AlignmentRun implements AutoCloseable {
+        private final CvPipeline pipeline;
+        private final BottomVisionEngine engine;
+        private BufferedImage image;
+
+        AlignmentRun(BottomVisionSettings settings) throws Exception {
+            if (settings instanceof OnnxBottomVisionSettings) {
+                pipeline = null;
+                engine = createOnnxEngine();
+            }
+            else {
+                pipeline = settings.getPipeline();
+                engine = null;
+            }
+        }
+
+        RotatedRect process(Camera camera, Part part, Nozzle nozzle, Location wantedLocation,
+                Location adjustedLocation, BottomVisionSettings settings) throws Exception {
+            if (pipeline != null) {
+                return processPipelineAndGetResult(pipeline, camera, part, nozzle,
+                        wantedLocation, adjustedLocation, settings);
+            }
+            NozzleTip nozzleTip = nozzle.getNozzleTip();
+            VisionCompositing compositing = part.getPackage().getVisionCompositing();
+            Composite composite = compositing.new Composite(part.getPackage(), settings,
+                    nozzle, nozzleTip, camera, wantedLocation);
+            if (compositing.getCompositingMethod().isEnforced()
+                    && composite.getCompositingSolution().isInvalid()) {
+                throw new Exception("Vision Compositing has not found a valid solution for package "
+                        + part.getPackage().getId() + ": " + composite.getDiagnostics());
+            }
+            for (Shot shot : composite.getShotsTravel()) {
+                Location shotLocation = composite.getShotLocation(shot)
+                        .addWithRotation(adjustedLocation.subtractWithRotation(wantedLocation));
+                if (nozzle.getLocation().getLinearLengthTo(camera.getLocation(nozzle))
+                        .compareTo(camera.getRoamingRadius().add(nozzleTip.getMaxPickTolerance())) > 0) {
+                    MovableUtils.moveToLocationAtSafeZ(nozzle, shotLocation);
+                }
+                else {
+                    nozzle.moveTo(shotLocation);
+                }
+                camera.actuateLightBeforeCapture(null);
+                try {
+                    image = camera.settleAndCapture(Camera.SettleOption.Settle);
+                }
+                finally {
+                    camera.actuateLightAfterCapture();
+                }
+                composite.accumulateShotDetection(shot, analyzeOnnxImage(engine, image));
+                displayResult(image, part, null, camera, nozzle);
+            }
+            composite.interpret();
+            return composite.getDetectedRotatedRect();
+        }
+
+        BufferedImage getImage() {
+            return pipeline == null ? image : OpenCvUtils.toBufferedImage(pipeline.getWorkingImage());
+        }
+
+        @Override
+        public void close() throws Exception {
+            if (pipeline != null) {
+                pipeline.close();
+            }
+        }
+    }
+
+    protected BottomVisionEngine createOnnxEngine() throws Exception {
+        VisionServiceController controller = VisionServiceController.getInstance();
+        if (!controller.isEnabled()) {
+            throw new Exception(Translations.getString("VisionService.EnableFirst"));
+        }
+        return new LocalBottomVisionClient(controller.getPort(), Duration.ofSeconds(10));
+    }
+
+    static RotatedRect analyzeOnnxImage(BottomVisionEngine engine, BufferedImage image) throws Exception {
+        BottomVisionEngine.Result result = engine.analyze(image);
+        if (result.getStatus() != BottomVisionEngine.Status.DETECTED) {
+            throw new Exception("ONNX bottom vision: " + result.getStatus());
+        }
+        BottomVisionEngine.Pose pose = result.getPose().get();
+        return new RotatedRect(new Point(pose.x, pose.y), new Size(pose.width, pose.height), pose.angle);
+    }
+
     @Override
     public boolean canHandle(PartSettingsHolder settingsHolder, boolean allowDisabled) {
         BottomVisionSettings visionSettings = getInheritedVisionSettings(settingsHolder);
@@ -770,7 +843,7 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
     public PropertySheet[] getPropertySheets() {
         return new PropertySheet[] {
                 new PropertySheetWizardAdapter(new ReferenceBottomVisionConfigurationWizard(this)),
-                new PropertySheetWizardAdapter(new BottomVisionSettingsConfigurationWizard(getBottomVisionSettings(), this))};
+                new PropertySheetWizardAdapter(getBottomVisionSettings().getConfigurationWizard(this))};
     }
 
     public enum PreRotateUsage {
@@ -1062,53 +1135,6 @@ public class ReferenceBottomVision extends AbstractPartAlignment {
                     }
                 }
             }
-        }
-    }
-
-    public boolean isShadowMode() {
-        return shadowMode;
-    }
-
-    public void setShadowMode(boolean shadowMode) {
-        this.shadowMode = shadowMode;
-    }
-
-    public int getShadowPort() {
-        return shadowPort;
-    }
-
-    public void setShadowPort(int shadowPort) {
-        this.shadowPort = shadowPort;
-    }
-
-    public int getShadowTimeoutMs() {
-        return shadowTimeoutMs;
-    }
-
-    public void setShadowTimeoutMs(int shadowTimeoutMs) {
-        this.shadowTimeoutMs = shadowTimeoutMs;
-    }
-
-    private void observeShadow(CvPipeline pipeline) {
-        if (!shadowMode) {
-            return;
-        }
-        try {
-            BufferedImage image = OpenCvUtils.toBufferedImage(pipeline.getWorkingImage());
-            if (image == null) {
-                return;
-            }
-            if (shadowObserver == null
-                    || shadowObserverPort != shadowPort
-                    || shadowObserverTimeoutMs != shadowTimeoutMs) {
-                shadowObserver = new ShadowBottomVisionObserver(shadowPort, Duration.ofMillis(shadowTimeoutMs));
-                shadowObserverPort = shadowPort;
-                shadowObserverTimeoutMs = shadowTimeoutMs;
-            }
-            shadowObserver.observe(image);
-        }
-        catch (Exception | Error e) {
-            Logger.warn("Shadow bottom vision: failed to capture working image: {}", e.getMessage());
         }
     }
 

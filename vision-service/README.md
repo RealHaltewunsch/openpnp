@@ -5,9 +5,10 @@ loaded per process and shared by every task head; heads are swappable, lazy-load
 and warmed before first time-critical use. The service talks to OpenPnP over
 loopback HTTP — the Java side never links ONNX Runtime itself.
 
-This service is in **shadow mode**: it runs alongside the existing OpenPnP
-bottom-vision path and only logs what it would see. The existing pipeline is
-unchanged until the service is accepted.
+Select **ONNX Bottom Vision** in OpenPnP's Vision Settings to use this service
+for actual placement offsets. Existing Bottom Vision settings continue to use
+their OpenCV pipelines. The bundled synthetic weights test the integration;
+they are not a trained part detector and must not be used for production placement.
 
 ## Verified state (macOS arm64, this machine)
 
@@ -15,7 +16,7 @@ unchanged until the service is accepted.
 - Provider auto-detect: `CoreMLExecutionProvider` on macOS arm64 (with CPU
   fallback for the few hand-crafted synthetic-encoder nodes CoreML does not
   support), `CPUExecutionProvider` elsewhere
-- All 29 service tests pass (`python3 -m unittest discover -s tests -v`)
+- All 28 service tests pass (`python3 -m unittest discover -s tests -v`)
 - Live smoke test: `/v1/health` and `/v1/infer`
   route all return the expected results on the fixture image
 - Startup via `./start-mac.sh` verified on macOS arm64
@@ -139,12 +140,37 @@ with HTTP 400 (INVALID_REQUEST), 409 (HEAD_UNAVAILABLE), 422 (INVALID_IMAGE)
 or 500 (INFERENCE_ERROR). `/v1/health` always returns HTTP 200 with per-head
 status `ok` / `missing_weights` / `incompatible` / `load_error`.
 
-## OpenPnP integration (shadow mode)
+## OpenPnP integration
 
-The existing `LocalBottomVisionClient` talks to `POST /v1/infer` (JSON body).
-OpenPnP's new shadow-mode observer reads the same results and logs them
-alongside the existing correction path without changing it. See the Java
-classes under `org.openpnp.vision.alternative` and `ReferenceBottomVision`.
+1. Open **Machine → Install Vision Service Dependencies...**. Select the service
+   directory (containing `vision_service`), a Python executable, and a model package
+   directory (containing `manifest.json` and its encoder/head weights). The defaults
+   are `<working-directory>/vision-service` and its `models/synthetic` subdirectory;
+   the default loopback port is 8010.
+2. **Install dependencies** creates `.venv` inside the service directory and installs
+   onnxruntime, numpy, Pillow and onnx there. It requires Python 3.9+, pip/venv and
+   network access. Existing system Python packages are not modified. Installation
+   output remains visible in the dialog.
+3. **Start service** starts the configured model package and enables the Machine
+   menu checkbox after health checks pass. The checkbox starts/stops the owned
+   process and, when enabled, starts it again with OpenPnP. Stop the service before
+   changing its directories, Python executable or port. Runtime output is appended
+   to `vision-service.log` in the service directory.
+4. In **Vision Settings**, choose **ONNX Bottom Vision**, add settings and assign
+   them to the part/package or machine. Shared rotation, size and offset settings
+   remain available; the OpenCV pipeline editor is hidden. If the service option
+   is disabled, selecting ONNX shows a reminder to enable it first.
+
+`LocalBottomVisionClient` calls `POST /v1/infer` for each settled, illuminated
+camera shot. The returned pose drives the existing pre/post-rotation correction,
+size/tolerance checks and vision compositing. Non-detected/uncertain results and
+service failures stop alignment with an error; they do not use an OpenCV fallback.
+The former shadow observer and its configuration fields have been removed.
+
+Startup allows 30 seconds for a compatible health response with an available
+bottom-vision head. A port already in use is rejected, and a failed owned process
+is stopped. Other missing task heads do not prevent Bottom Vision from starting.
+The first inference lazily loads and warms the head, with a 10-second request limit.
 
 ## Start commands
 
